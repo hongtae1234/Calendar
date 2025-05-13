@@ -30,10 +30,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
+  flutter_local_notifications: ^16.1.0
+  timezone: ^0.9.2
   intl: ^0.19.0
   flutter_localizations:
     sdk: flutter
+
+
+
 
 dev_dependencies:
   flutter_test:

@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:intl/intl.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('ko_KR', null);
-
+void main() {
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
     home: CalendarApp(),
@@ -31,7 +27,12 @@ class _CalendarAppState extends State<CalendarApp> {
   DateTime currentMonth = DateTime.now();
   DateTime selectedDate = DateTime.now();
   Map<DateTime, List<String>> events = {};
-  Map<DateTime, List<TimeOfDay>> eventTimes = {};
+  Map<DateTime, List<Map<String, dynamic>>> eventTimes = {};
+
+  TextEditingController _eventController = TextEditingController();
+  DateTime? _startDateTime;
+  DateTime? _endDateTime;
+  bool _selectingStart = true;
 
   List<String> daysInWeek = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -55,213 +56,258 @@ class _CalendarAppState extends State<CalendarApp> {
     return DateTime(year, month, 1).weekday % 7;
   }
 
-  void _showCentralEventDialog(DateTime date) {
-    TextEditingController controller = TextEditingController();
-    TimeOfDay? selectedTime;
+  bool isSameDate(DateTime d1, DateTime d2) {
+    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
+  }
 
-    showDialog(
+  void _showDateTimePickerWithSetter(void Function(void Function()) externalSetState) {
+    DateTime initialDate = DateTime.now();
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return Center(
-          child: SingleChildScrollView(
-            child: AlertDialog(
-              title: Text(DateFormat('yyyy년 M월 d일', 'ko_KR').format(date)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, modalSetState) {
+            return SizedBox(
+              height: 300,
+              child: Column(
                 children: [
-                  ...events[date]?.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final event = entry.value;
-                    final time = eventTimes[date]?[index];
-                    return ListTile(
-                      title: Text('${time?.format(context) ?? ''} $event'),
-                      trailing: IconButton(
-                        icon: Icon(Icons.delete, color: Colors.red),
-                        onPressed: () {
-                          setState(() {
-                            events[date]!.removeAt(index);
-                            eventTimes[date]?.removeAt(index);
-                            if (events[date]!.isEmpty) events.remove(date);
-                          });
-                          Navigator.pop(context);
-                          _showCentralEventDialog(date);
-                        },
-                      ),
-                    );
-                  }) ?? [Text('일정이 없습니다.', style: TextStyle(color: Colors.grey))],
-                  TextField(
-                    controller: controller,
-                    decoration: InputDecoration(hintText: '새 일정 입력'),
-                  ),
-                  SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      showCupertinoModalPopup(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return Container(
-                            height: 250,
-                            color: Colors.white,
-                            child: CupertinoDatePicker(
-                              mode: CupertinoDatePickerMode.time,
-                              initialDateTime: DateTime(date.year, date.month, date.day, 12, 0),
-                              use24hFormat: true,
-                              onDateTimeChanged: (DateTime picked) {
-                                selectedTime = TimeOfDay(hour: picked.hour, minute: picked.minute);
-                              },
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        GestureDetector(
+                          onTap: () => modalSetState(() => _selectingStart = true),
+                          child: Text(
+                            '시작: ${_startDateTime != null ? DateFormat('M월 d일 E HH:mm', 'ko_KR').format(_startDateTime!) : '-'}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _selectingStart ? Colors.blue : Colors.black,
                             ),
-                          );
-                        },
-                      );
-                    },
-                    child: Text('시간 설정 (iOS 스타일)'),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => modalSetState(() => _selectingStart = false),
+                          child: Text(
+                            '종료: ${_endDateTime != null ? DateFormat('M월 d일 E HH:mm', 'ko_KR').format(_endDateTime!) : '-'}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: !_selectingStart ? Colors.blue : Colors.black,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      String newEvent = controller.text.trim();
-                      if (newEvent.isNotEmpty) {
-                        setState(() {
-                          events.putIfAbsent(date, () => []);
-                          eventTimes.putIfAbsent(date, () => []);
-                          events[date]!.add(newEvent);
-                          eventTimes[date]!.add(selectedTime ?? TimeOfDay.now());
+                  Expanded(
+                    child: CupertinoDatePicker(
+                      mode: CupertinoDatePickerMode.dateAndTime,
+                      initialDateTime: initialDate,
+                      onDateTimeChanged: (DateTime newDateTime) {
+                        modalSetState(() {
+                          if (_selectingStart) {
+                            _startDateTime = newDateTime;
+                          } else {
+                            _endDateTime = newDateTime;
+                          }
                         });
-                      }
-                      Navigator.pop(context);
-                    },
-                    child: Text('일정 추가'),
+                      },
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      TextButton(onPressed: () => Navigator.pop(context), child: Text('취소')),
+                      TextButton(
+                        onPressed: () {
+                          externalSetState(() {});
+                          Navigator.pop(context);
+                        },
+                        child: Text('확인'),
+                      ),
+                    ],
                   )
                 ],
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildEventList() {
-    List<String> dayEvents = events[selectedDate] ?? [];
-    List<TimeOfDay> times = eventTimes[selectedDate] ?? [];
+  void _showEventDialog(DateTime date) {
+    _eventController.text = '';
+    _startDateTime = null;
+    _endDateTime = null;
 
-    if (dayEvents.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text('이날의 일정이 없습니다', style: TextStyle(color: Colors.grey)),
-      );
-    }
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Center(
+              child: AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                contentPadding: const EdgeInsets.all(20),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(DateFormat('yyyy년 M월 d일', 'ko_KR').format(date), style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 10),
+                    TextField(
+                      controller: _eventController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(hintText: '새 일정 입력'),
+                    ),
+                    SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => _showDateTimePickerWithSetter(setState),
+                      child: Text("시간 설정"),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text('취소'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              if (events.containsKey(date)) {
+                                events.remove(date);
+                                eventTimes.remove(date);
+                              }
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: Text('삭제', style: TextStyle(color: Colors.redAccent)),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            final text = _eventController.text.trim();
+                            if (text.isNotEmpty && _startDateTime != null && _endDateTime != null) {
+                              DateTime iterDate = DateTime(_startDateTime!.year, _startDateTime!.month, _startDateTime!.day);
+                              DateTime endDateOnly = DateTime(_endDateTime!.year, _endDateTime!.month, _endDateTime!.day);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: List.generate(dayEvents.length, (index) => Text('• ${times[index].format(context)} ${dayEvents[index]}')),
+                              while (!iterDate.isAfter(endDateOnly)) {
+                                events.putIfAbsent(iterDate, () => []);
+                                if (isSameDate(iterDate, _startDateTime!)) {
+                                  if (!events[iterDate]!.contains(text)) {
+                                    events[iterDate]!.add(text);
+                                  }
+                                }
+
+                                eventTimes.putIfAbsent(iterDate, () => []);
+                                eventTimes[iterDate]!.add({
+                                  'start': isSameDate(iterDate, _startDateTime!) ? _startDateTime : null,
+                                  'end': isSameDate(iterDate, endDateOnly) ? _endDateTime : null,
+                                });
+
+                                iterDate = iterDate.add(Duration(days: 1));
+                              }
+
+                              Navigator.pop(context);
+                              setState(() {});
+                            }
+                          },
+                          child: Text('확인'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final int year = currentMonth.year;
-    final int month = currentMonth.month;
-    final int daysInMonth = getDaysInMonth(year, month);
-    final int startDay = getStartDay(year, month);
-
-    DateTime today = DateTime.now();
-    DateTime firstDayThisMonth = DateTime(year, month, 1);
-    DateTime firstVisibleDate = firstDayThisMonth.subtract(Duration(days: startDay));
-
-    int totalCells = startDay + daysInMonth;
-    int rowCount = (totalCells / 7).ceil();
-    int totalVisibleDays = rowCount * 7;
-
-    List<Widget> calendarCells = [];
-    for (int i = 0; i < totalVisibleDays; i++) {
-      DateTime cellDate = firstVisibleDate.add(Duration(days: i));
-      bool isToday = cellDate.year == today.year && cellDate.month == today.month && cellDate.day == today.day;
-      bool isCurrentMonth = cellDate.month == month;
-
-      List<String> cellEvents = events[cellDate] ?? [];
-
-      calendarCells.add(
-        GestureDetector(
-          onTap: () {
-            setState(() => selectedDate = cellDate);
-            _showCentralEventDialog(cellDate);
-          },
-          child: Container(
-            margin: const EdgeInsets.all(1),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black12),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.all(6),
-                  decoration: isToday ? BoxDecoration(color: Colors.blue, shape: BoxShape.circle) : null,
-                  child: Text(
-                    '${cellDate.day}',
-                    style: TextStyle(
-                      color: isCurrentMonth ? (isToday ? Colors.white : Colors.black87) : Colors.grey,
-                      fontWeight: isCurrentMonth ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  ),
-                ),
-                if (cellEvents.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                    child: Text(
-                      cellEvents.take(5).join('\n'),
-                      style: TextStyle(fontSize: 9, color: Colors.red),
-                      textAlign: TextAlign.center,
-                      maxLines: 5,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
-      backgroundColor: Color(0xFFFAF3DD),
+      backgroundColor: Color(0xFFFDF6E4),
       appBar: AppBar(
-        backgroundColor: Color(0xFFFAF3DD),
+        backgroundColor: Color(0xFFFDF6E4),
         elevation: 0,
-        title: Text('${year}년 ${month}월', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
         centerTitle: true,
-        leading: IconButton(icon: Icon(Icons.chevron_left, color: Colors.black87), onPressed: goToPrevMonth),
-        actions: [
-          IconButton(icon: Icon(Icons.chevron_right, color: Colors.black87), onPressed: goToNextMonth),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              DateFormat('M월 d일 EEEE', 'ko_KR').format(selectedDate),
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-            SizedBox(height: 6),
-            _buildEventList(),
-            SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: daysInWeek.map((day) => Expanded(child: Center(child: Text(day)))).toList(),
-            ),
-            SizedBox(height: 8),
-            Expanded(
-              child: GridView.count(
-                crossAxisCount: 7,
-                children: calendarCells,
-              ),
-            ),
-          ],
+        title: Text(
+          DateFormat('yyyy년 M월', 'ko_KR').format(currentMonth),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
+      ),
+      body: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: daysInWeek
+                .map((day) => Expanded(
+                      child: Center(
+                        child: Text(
+                          day,
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+          Expanded(
+            child: GridView.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7),
+              itemCount: getDaysInMonth(currentMonth.year, currentMonth.month) + getStartDay(currentMonth.year, currentMonth.month),
+              itemBuilder: (context, index) {
+                int startDay = getStartDay(currentMonth.year, currentMonth.month);
+                int totalDays = getDaysInMonth(currentMonth.year, currentMonth.month);
+
+                if (index < startDay) return Container();
+                int day = index - startDay + 1;
+                DateTime cellDate = DateTime(currentMonth.year, currentMonth.month, day);
+                bool isToday = isSameDate(cellDate, DateTime.now());
+                final cellEvents = events[cellDate] ?? [];
+
+                return GestureDetector(
+                  onTap: () => _showEventDialog(cellDate),
+                  child: Container(
+                    margin: const EdgeInsets.all(2),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          '$day',
+                          style: TextStyle(
+                            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                            color: isToday ? Colors.white : Colors.black,
+                            backgroundColor: isToday ? Colors.blue : Colors.transparent,
+                          ),
+                        ),
+                        if (cellEvents.isNotEmpty)
+                          Container(
+                            margin: EdgeInsets.only(top: 2),
+                            padding: EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: Colors.lightBlue.shade100,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              cellEvents.first,
+                              style: TextStyle(fontSize: 10, color: Colors.black),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          )
+        ],
       ),
     );
   }
