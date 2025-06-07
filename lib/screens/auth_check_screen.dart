@@ -18,12 +18,19 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
+    print('AuthCheckScreen: Checking login status...');
     final isLoggedIn = await AuthService.isLoggedIn();
+    print('AuthCheckScreen: isLoggedIn = $isLoggedIn');
+    
+    if (!mounted) return;
+    
     if (isLoggedIn) {
+      print('AuthCheckScreen: User is logged in, navigating to MainScreen');
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => MainScreen()),
       );
     } else {
+      print('AuthCheckScreen: User is not logged in, navigating to LoginScreen');
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );

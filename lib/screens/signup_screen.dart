@@ -24,24 +24,26 @@ class _SignupScreenState extends State<SignupScreen> {
         _errorMessage = null;
       });
 
+      print('SignupScreen: Attempting signup for user: ${_usernameController.text}');
       final success = await AuthService.signup(
         _usernameController.text,
         _passwordController.text,
       );
+      print('SignupScreen: Signup result: $success');
 
       setState(() {
         _isLoading = false;
       });
 
       if (success && mounted) {
-        // 회원가입 성공 시 main.dart에 정의된 MainScreen으로 이동
+        print('SignupScreen: Signup successful, navigating to MainScreen');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (context) => MainScreen(),
           ),
         );
       } else if (mounted) {
-        // 회원가입 실패 시 에러 메시지 표시
+        print('SignupScreen: Signup failed, showing error message');
         setState(() {
           _errorMessage = '이미 사용 중인 아이디이거나 회원가입에 실패했습니다.';
         });

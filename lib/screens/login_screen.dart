@@ -23,24 +23,26 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = true;
       });
 
+      print('LoginScreen: Attempting login for user: ${_usernameController.text}');
       final success = await AuthService.login(
         _usernameController.text,
         _passwordController.text,
       );
+      print('LoginScreen: Login result: $success');
 
       setState(() {
         _isLoading = false;
       });
 
       if (success && mounted) {
-        // 로그인 성공 시 main.dart에 정의된 MainScreen으로 이동
+        print('LoginScreen: Login successful, navigating to MainScreen');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => MainScreen(), // Use MainScreen from main.dart
+            builder: (context) => MainScreen(), // Navigate to MainScreen
           ),
         );
       } else if (mounted) {
-        // 로그인 실패 시 에러 메시지 표시
+        print('LoginScreen: Login failed, showing error message');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.'),
