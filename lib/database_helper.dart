@@ -104,7 +104,7 @@ class DatabaseHelper {
     }
   }
 
-  // 이벤트 저장
+  // 이벤트 저장 (신규 및 업데이트 겸용)
   Future<void> saveEvent(Map<String, dynamic> event) async {
     try {
       if (kIsWeb) {
@@ -152,6 +152,13 @@ class DatabaseHelper {
       }
       rethrow;
     }
+  }
+
+  // 이벤트 업데이트
+  Future<void> updateEvent(Map<String, dynamic> event) async {
+    // saveEvent 메서드가 이미 ID를 기반으로 기존 이벤트를 제거하고 새 이벤트를 추가하므로,
+    // updateEvent는 saveEvent를 호출하여 동일한 기능을 수행합니다.
+    await saveEvent(event);
   }
 
   // 모든 이벤트 로드
