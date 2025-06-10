@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
 import 'database_helper.dart'; // DatabaseHelper import
-import 'services/transaction_service.dart'; // TransactionService import
-import 'models/transaction.dart'; // Transaction models import
 
 // Define a callback type for event actions
 typedef EventActionCallback = Future<void> Function(
@@ -23,7 +21,6 @@ class ScheduleInputModal extends StatefulWidget {
   final List<Color> colorOptions;
   final EventActionCallback onEventAction;
   final DatabaseHelper dbHelper;
-  final TransactionService transactionService;
 
   // Constructor for new event
   const ScheduleInputModal({
@@ -34,7 +31,6 @@ class ScheduleInputModal extends StatefulWidget {
     required this.colorOptions,
     required this.onEventAction,
     required this.dbHelper,
-    required this.transactionService,
   }) : super(key: key);
 
   @override
@@ -661,32 +657,60 @@ class _ScheduleInputModalState extends State<ScheduleInputModal> {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: () async {
-                    if (_isEditing) {
-                      if (_editingEventController.text.isNotEmpty) {
-                        Navigator.pop(context);
+                    final saveUpdateEventId = _isEditing ? _editingEventId : null;
+                    final saveUpdateText = _isEditing ? _editingEventController.text.trim() : _newEventController.text.trim();
+                    final saveUpdateStartDateTime = _isEditing ? _editingStartDateTime : _startDateTime;
+                    final saveUpdateEndDateTime = _isEditing ? _editingEndDateTime : _endDateTime;
+                    final saveUpdateColor = _isEditing ? (_editingSelectedColor ?? widget.colorOptions[0]) : _selectedColor;
+                    final saveUpdateRecurrenceSettings = _isEditing ? _editingRecurrenceSettings : _recurrenceSettings;
+
+                    print('Mode: ${_isEditing ? 'Editing' : 'New'}');
+                    print('Event ID: $saveUpdateEventId');
+                    print('Event Text: $saveUpdateText');
+                    print('Start DateTime: $saveUpdateStartDateTime');
+                    print('End DateTime: $saveUpdateEndDateTime');
+                    print('Selected Color: $saveUpdateColor');
+                    print('Recurrence Settings: $saveUpdateRecurrenceSettings');
+
+                    bool eventIsValid = saveUpdateText.isNotEmpty && saveUpdateStartDateTime != null && saveUpdateEndDateTime != null;
+
+                    if (eventIsValid) {
+                      print('Proceeding with event save/update...');
+
+                      if (_isEditing && saveUpdateEventId != null) {
+                        // 기존 이벤트 업데이트 로직
                         await widget.onEventAction(
-                          'update',
-                          _editingEventId,
-                          _editingEventController.text,
-                          _editingStartDateTime,
-                          _editingEndDateTime,
-                          _editingSelectedColor,
-                          _editingRecurrenceSettings,
+                          'update', // actionType
+                          saveUpdateEventId,
+                          saveUpdateText,
+                          saveUpdateStartDateTime,
+                          saveUpdateEndDateTime,
+                          saveUpdateColor,
+                          saveUpdateRecurrenceSettings,
                         );
+                        print('Event updated...');
+                      } else {
+                        // 새 이벤트 저장 로직
+                        await widget.onEventAction(
+                          'save', // actionType
+                          null, // eventId (새 이벤트이므로 null)
+                          saveUpdateText,
+                          saveUpdateStartDateTime,
+                          saveUpdateEndDateTime,
+                          saveUpdateColor,
+                          saveUpdateRecurrenceSettings,
+                        );
+                         print('New event saved...');
                       }
+                      print('Event save/update process finished.');
+
+                      _newEventController.dispose();
+                      _editingEventController.dispose();
+                       _isEditing = false;
+                      Navigator.pop(context);
                     } else {
-                      if (_newEventController.text.isNotEmpty) {
-                        Navigator.pop(context);
-                        await widget.onEventAction(
-                          'save',
-                          null,
-                          _newEventController.text,
-                          _startDateTime,
-                          _endDateTime,
-                          _selectedColor,
-                          _recurrenceSettings,
-                        );
-                      }
+                      print('Validation failed:');
+                      print('Event valid: $eventIsValid');
                     }
                   },
                   child: Text(_isEditing ? '수정' : '저장'),

@@ -13,6 +13,7 @@ import 'schedule_input_page.dart'; // Import ScheduleInputModal
 import 'screens/settings_screen.dart'; // Import SettingsScreen
 import 'services/auth_service.dart'; // Import AuthService
 import 'screens/auth_check_screen.dart'; // Import AuthCheckScreen
+import 'academic_schedule_helper.dart'; // Import AcademicScheduleHelper
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // Ensure Flutter is initialized
@@ -60,8 +61,6 @@ class _CalendarViewState extends State<CalendarView> {
   Map<String, dynamic>? _currentWeather; // To store weather data
   String? _weatherIconUrl; // To store weather icon URL
   Map<String, dynamic>? _forecastWeather; // To store forecast weather data
-
-  final TransactionService _transactionService = TransactionService(); // TransactionService instance
 
   @override
   void initState() {
@@ -273,7 +272,7 @@ class _CalendarViewState extends State<CalendarView> {
      }
   }
 
-  Future<void> _saveEvent(String text, DateTime startDate, DateTime endDate, Color color, Map<String, dynamic>? recurrenceSettings, String? transactionId) async {
+  Future<void> _saveEvent(String text, DateTime startDate, DateTime endDate, Color color, [Map<String, dynamic>? recurrenceSettings]) async {
     print('=== Starting Event Save ===');
     print('Input validation:');
     print('Text: $text');
@@ -281,7 +280,6 @@ class _CalendarViewState extends State<CalendarView> {
     print('End Date: $endDate');
     print('Color: $color');
     print('Recurrence Settings: $recurrenceSettings');
-    print('Transaction ID: $transactionId');
 
     if (text.isEmpty) {
       print('Error: Event text is empty');
@@ -306,7 +304,6 @@ class _CalendarViewState extends State<CalendarView> {
       'end_date': endDate.toIso8601String(),
       'color': color.value,
       'recurrence': recurrenceSettings,
-      'transactionId': transactionId, // Save transaction ID
     };
 
     try {
@@ -324,7 +321,6 @@ class _CalendarViewState extends State<CalendarView> {
         'startDate': startDate,
         'endDate': endDate,
         'recurrence': recurrenceSettings,
-        'transactionId': transactionId, // Store transaction ID
       };
       
       // eventDetails 맵 업데이트
@@ -447,7 +443,7 @@ class _CalendarViewState extends State<CalendarView> {
     }
   }
 
-  Future<void> _updateEvent(String eventId, String text, DateTime startDate, DateTime endDate, Color color, Map<String, dynamic>? recurrenceSettings, String? transactionId) async {
+  Future<void> _updateEvent(String eventId, String text, DateTime startDate, DateTime endDate, Color color, Map<String, dynamic>? recurrenceSettings) async {
     print('=== Starting Event Update ===');
     print('Event ID: $eventId');
     print('Text: $text');
@@ -455,7 +451,6 @@ class _CalendarViewState extends State<CalendarView> {
     print('End Date: $endDate');
     print('Color: $color');
     print('Recurrence Settings: $recurrenceSettings');
-    print('Transaction ID: $transactionId');
 
     final eventData = {
       'id': eventId,
@@ -464,7 +459,6 @@ class _CalendarViewState extends State<CalendarView> {
       'end_date': endDate.toIso8601String(),
       'color': color.value,
       'recurrence': recurrenceSettings,
-      'transactionId': transactionId, // Update transaction ID
     };
 
     try {
@@ -483,7 +477,7 @@ class _CalendarViewState extends State<CalendarView> {
     } catch (e) {
       print('Error updating event $eventId: $e');
       print('Event data: $eventData');
-      print('Stack trace: ${e.toString()}');
+      print('Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -492,15 +486,6 @@ class _CalendarViewState extends State<CalendarView> {
       print('=== Starting Event Delete ===');
       print('Attempting to delete event with ID: $eventId');
 
-      // Get event details to check for associated transaction
-      final event = eventDetails[eventId];
-      if (event != null && event['transactionId'] != null) {
-        final transactionId = event['transactionId'] as String;
-        print('Found associated transaction ID: $transactionId. Deleting transaction...');
-        await _transactionService.deleteTransaction(transactionId);
-        print('Associated transaction $transactionId deleted.');
-      }
-      
       await dbHelper.deleteEvent(eventId);
       print('Event $eventId deleted successfully from database.');
       
@@ -552,13 +537,13 @@ class _CalendarViewState extends State<CalendarView> {
     Map<String, dynamic>? recurrence,
   ) async {
     if (action == 'save') {
-      await _saveEvent(text!, startDate!, endDate!, color!, recurrence, null);
+      await _saveEvent(text!, startDate!, endDate!, color!);
     } else if (action == 'update') {
       if (eventId == null || text == null || startDate == null || endDate == null || color == null) {
         print('Error: Missing parameters for update action.');
         return;
       }
-      await _updateEvent(eventId, text, startDate, endDate, color, recurrence, null);
+      await _updateEvent(eventId, text, startDate, endDate, color, recurrence);
     } else if (action == 'delete') {
       if (eventId == null) {
         print('Error: Missing eventId for delete action.');
@@ -673,30 +658,37 @@ class _CalendarViewState extends State<CalendarView> {
                 bool isHoliday = HolidayHelper.isHoliday(cellDate);
                 String? holidayName = HolidayHelper.getHolidayName(cellDate);
 
-                // Check if there's a recurring event on this date
+                String? academicScheduleName = AcademicScheduleHelper.getAcademicScheduleName(cellDate);
+                print('Debug: cellDate: $cellDate, academicScheduleName: $academicScheduleName'); // 디버그용 출력
+
                 bool hasRecurringEvent = cellEvents.any((eventId) {
                    final event = eventDetails[eventId];
                    return event != null && event['recurrence'] != null;
                 });
 
                 return GestureDetector(
-                  onTap: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (BuildContext context) {
-                        return ScheduleInputModal(
-                          selectedDate: cellDate,
-                          eventDetails: eventDetails,
-                          events: events,
-                          colorOptions: colorOptions,
-                          onEventAction: _handleEventAction,
-                          dbHelper: dbHelper,
-                          transactionService: _transactionService,
-                        );
-                      },
-                    );
-                  },
+                  onTap: () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (BuildContext context) {
+                      return ScheduleInputModal(
+                        selectedDate: cellDate,
+                        events: events,
+                        eventDetails: eventDetails,
+                        colorOptions: colorOptions,
+                        dbHelper: dbHelper,
+                        onEventAction: (action, eventId, text, startDate, endDate, color, recurrenceSettings) async {
+                           if (action == 'save') {
+                             await _saveEvent(text!, startDate!, endDate!, color!, recurrenceSettings);
+                           } else if (action == 'update') {
+                             await _updateEvent(eventId!, text!, startDate!, endDate!, color!, recurrenceSettings);
+                           } else if (action == 'delete') {
+                             await _deleteEvent(eventId!);
+                           }
+                        },
+                      );
+                    },
+                  ),
                   child: Container(
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey.shade300),
@@ -718,12 +710,16 @@ class _CalendarViewState extends State<CalendarView> {
                               '$day',
                               style: TextStyle(
                                 fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                                color: isHoliday ? Colors.red : (hasRecurringEvent ? Colors.purple : (isToday ? Colors.blue : Colors.black)),
+                                color: isHoliday
+                                    ? Colors.red
+                                    : (academicScheduleName != null
+                                        ? AcademicScheduleHelper.getAcademicScheduleColor() // 학사 일정 색상
+                                        : (hasRecurringEvent ? Colors.purple : (isToday ? Colors.blue : Colors.black))),
                               ),
                             ),
                           ),
                         ),
-                        if (holidayName != null)
+                        if (holidayName != null) // 공휴일 우선 표시
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 2),
                             child: Text(
@@ -731,6 +727,19 @@ class _CalendarViewState extends State<CalendarView> {
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.red,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          )
+                        else if (academicScheduleName != null) // 공휴일이 아니면 학사 일정 표시
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: Text(
+                              academicScheduleName,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AcademicScheduleHelper.getAcademicScheduleColor(), // 학사 일정 색상
                               ),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
